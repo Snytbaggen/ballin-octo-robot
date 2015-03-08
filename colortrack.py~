@@ -1,5 +1,6 @@
-# Raspbery Pi Color Tracking and Robot Steering
-# Code by Daniel Haggmyr, with borrowed code from Oscar Liang
+# Raspbery Pi Color Tracking Project
+# Code written by Oscar Liang
+# 30 Jun 2013
 
 import math
 import numpy as np
@@ -19,7 +20,7 @@ hsv_range=50
 blob_sensitivity=0
 
 #Booleans
-hsv_tracking = False
+hsv_recalculate = False
 data_on = False
 window_exists = False
 
@@ -34,25 +35,14 @@ text_y_offset=15
 text_color=(128,255,255)
 
 
-#Reads the HSV value in a certain pixel in a given image.
-#This code is modified from the original code Oscar Liang wrote.
-def ReadHsvValue(image,x,y):
-    global hsvi
-    hsv=cv.CreateImage(cv.GetSize(image),8,3)
-    cv.CvtColor(image,hsv,cv.CV_BGR2HSV)
-    hsvi = cv.Get2D(hsv, y, x)
-    UpdateTreshold()
-
-#Is called on mouse events.
 def MyMouseCallback(event, x, y, flags, param):
-    global frame
-    if event==cv.CV_EVENT_LBUTTONDBLCLK:
-        ReadHsvValue(frame,x,y)
+    global rgbj,LOW_TRESHOLD,HIGH_TRESHOLD, hsv_range
+    if event==cv.CV_EVENT_LBUTTONDBLCLK:		# Here event is left mouse button double-clicked
+        hsv=cv.CreateImage(cv.GetSize(frame),8,3)
+        cv.CvtColor(frame,hsv,cv.CV_BGR2HSV)
+        rgbj = cv.Get2D(hsv, y, x)
+        UpdateTreshold()
 
-#This turns a BGR color image into an HSV image, as well as
-#filters colors depending on a lower and upper treshold. The image is
-#returned as a black and white image, where white is the filtered out
-#color. Code and comments copied from the original code by Oscar Liang.
 def ColorProcess(img):
     # returns thresholded image
     imgHSV = cv.CreateImage(cv.GetSize(img), 8, 3)
@@ -65,15 +55,14 @@ def ColorProcess(img):
     cv.InRangeS(imgHSV, LOW_TRESHOLD, HIGH_TRESHOLD, imgProcessed)
     return imgProcessed
 
-#Updates the tresholds used in the ColorProcess function above, depending on the
-#hsv-range variable.
 def UpdateTreshold():
     global LOW_TRESHOLD, HIGH_TRESHOLD, hsv_range
-    LOW_TRESHOLD = [hsvi[0]-hsv_range, hsvi[1]-hsv_range,hsvi[2]-hsv_range]
-    HIGH_TRESHOLD = [hsvi[0]+hsv_range, hsvi[1]+hsv_range,hsvi[2]+hsv_range]
+    LOW_TRESHOLD = [rgbj[0]-hsv_range, rgbj[1]-hsv_range,rgbj[2]-hsv_range]
+    HIGH_TRESHOLD = [rgbj[0]+hsv_range, rgbj[1]+hsv_range,rgbj[2]+hsv_range]
+
 
 ##########################
-#Main program starts here#
+#MAIN PROGRAM STARTS HERE#
 ##########################
 capture = cv.CreateCameraCapture(0)
 
@@ -112,57 +101,61 @@ while True:
 
         # Calculating the center postition of the blob
         posX = int(moment10 / area)
-        posY = int(moment01 / area) 
-        #Copied code ends here
+        posY = int(moment01 / area)
 
-        #Update HSV value from middle of blob.
-        #Kind of inaccurate, an average value would be a lot better
-        if hsv_tracking:
-            ReadHsvValue(frame,posX,posY)
-        
-        #Calculate a value from the area proportional to the object's radius, assuming
-        #it is a circle. Then draw a circle for visual aid around the object, with the
-        #divisor 15 choosen by experiment to be "good enough".
+        #update HSV value from middle of blob
+        if hsv_recalculate:
+            hsv=cv.CreateImage(cv.GetSize(frame),8,3)
+            cv.CvtColor(frame,hsv,cv.CV_BGR2HSV)
+            rgbj = cv.Get2D(hsv, posY, posX)
+            LOW_TRESHOLD = [rgbj[0]-hsv_range, rgbj[1]-hsv_range,rgbj[2]-hsv_range]
+            HIGH_TRESHOLD = [rgbj[0]+hsv_range, rgbj[1]+hsv_range,rgbj[2]+hsv_range]
+
         radius = int(math.sqrt(area/math.pi))
+#        data_image = cv.CreateImage((160,120),8,3)
         cv.Circle(frame, (posX, posY), radius/15, (0,0,255), 2,8,0)
-
-        #TODO: Put regulation and robot movement here
-
-        #If a blob has been found then also write its position in text on the processed image.
         cv.PutText(imgColorProcessed, "Blob X, Y: "+str(posX)+", "+str(posY), (text_x_offset,text_y_offset), font, text_color)
     else:
-        #If a blob haven't been found then indicate that by writing "N/A" instead of position data.
         cv.PutText(imgColorProcessed, "Blob X, Y: N/A", (text_x_offset,text_y_offset), font, (128,255,255))
-
-    #Put the rest of the text on the processed image.
     cv.PutText(imgColorProcessed, "HSV-range: "+str(hsv_range), (text_x_offset,text_y_offset*2), font, text_color)
     cv.PutText(imgColorProcessed, "Sensitivity: "+str(-1*blob_sensitivity/250), (text_x_offset,text_y_offset*3), font, text_color)
-    if hsv_tracking:
+    if hsv_recalculate:
         cv.PutText(imgColorProcessed, "Hue tracking: On", (text_x_offset,text_y_offset*4), font, text_color)
     else:
         cv.PutText(imgColorProcessed, "Hue tracking: Off", (text_x_offset,text_y_offset*4), font, text_color)
-    
-    #Show the processed and original image.
+        
     cv.ShowImage("Processed", imgColorProcessed)
     cv.ShowImage("Original", frame)
+    if data_on:
+        if not window_exists:
+            cv.NamedWindow("data",1)
+            window_exists = True
+        cv.ShowImage("data", data_image)
+    else:
+        if window_exists:
+            cv.DestroyWindow("data")
+            window_exists = False
+            
     
-    #Wait for key press, and if a key has been pressed then act accordingly.
-    #This function call is very important because it also handles a lot of stuff
-    #regarding the windows.
+    #TODO: print when parameters changes
     key = cv.WaitKey(10)
-    #if key > 0:    #Uncomment these lines to output the raw key data,
-    #    print key  #useful for when adding more keypresses.
+    #if key > 0:
+    #    print key
+    if key == 1048676: #d, toggle data
+        data_on = not data_on
     if key == 1048689: #q, quit
         break
     if key == 1048692: #t, toggle hue tracking
-        hsv_tracking = not hsv_tracking
+        hsv_recalculate = not hsv_recalculate
     if key == 1113938: #up arrow, increase hsv range
         hsv_range+=1
         UpdateTreshold()
     if key == 1113940: #down arrow, decrease hsv range
         hsv_range-=1
-        UpdateTreshold()
+        UpdateTreshold(hsv_range)
     if key == 1113937: #left arrow, increase detection sensitivity (detects smaller blobs)
         blob_sensitivity += 250
     if key == 1113939: #right arrow, decrease detection sensitivity (ignores smaller blobs)
         blob_sensitivity -= 250
+    #    break
+    #    a=1
