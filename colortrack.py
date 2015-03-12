@@ -1,16 +1,20 @@
 # Raspbery Pi Color Tracking and Robot Steering
 # Code by Daniel Haggmyr, with borrowed code from Oscar Liang
 
-import math
+import math, serial
 import numpy as np
 import RPi as GPIO
 import cv2.cv as cv
 
-global frame, rgbj,LOW_TRESHOLD, HIGH_TRESHOLD, hsv_range
+global frame, rgbj,LOW_TRESHOLD, HIGH_TRESHOLD, hsv_range, serial
+
+#Serial port setup
+serial = serial.Serial('/dev/ttyUSB0',9600)
 
 # captured image size
 width = 160
 height = 120
+blank_image = cv.CreateImage((width,height),8,3) 
 
 #Inital treshold and range values choosen by experimentation
 LOW_TRESHOLD = 74,84,90
@@ -22,6 +26,7 @@ blob_sensitivity=0
 hsv_tracking = False
 data_on = False
 window_exists = False
+video_feed = True
 
 #Text constants and font creation
 hscale = vscale = 0.4
@@ -33,6 +38,45 @@ text_x_offset=5
 text_y_offset=15
 text_color=(128,255,255)
 
+def IntToStr(number):
+    ret = ""
+    if number < 100:
+        ret+= "0"
+        if number < 10:
+            ret +="0"
+    ret += str(number)
+    return ret
+
+def BuildSpeedCommand(speed):
+    cmd = ""
+    if speed >= 0:
+        cmd = "F"
+    else:
+        cmd = "B"
+        speed = -speed
+    if speed > 255:
+        speed = 255
+    cmd+=IntToStr(speed)+"000"
+    return cmd
+
+def BuildTurnCommand(turn):
+    cmd = ""
+    if turn >= 0:
+        cmd = "L"
+    else:
+        cmd = "R"
+        turn = -turn
+    if turn > 255:
+        turn = 255
+    cmd += IntToStr(turn)+"000"
+    return cmd
+
+def SendCommand(speed, turn):
+    global serial
+    serial.write(BuildSpeedCommand(speed).encode('utf-8'))
+    #should wait for OK here
+    serial.write(BuildTurnCommand(turn).encode('utf-8'))
+    #should wait for OK here
 
 #Reads the HSV value in a certain pixel in a given image.
 #This code is modified from the original code Oscar Liang wrote.
@@ -114,6 +158,7 @@ while True:
         posX = int(moment10 / area)
         posY = int(moment01 / area) 
         #Copied code ends here
+        
 
         #Update HSV value from middle of blob.
         #Kind of inaccurate, an average value would be a lot better
@@ -127,6 +172,8 @@ while True:
         cv.Circle(frame, (posX, posY), radius/15, (0,0,255), 2,8,0)
 
         #TODO: Put regulation and robot movement here
+        turn = (posX-width/2)*3
+        SendCommand(turn, 0)
 
         #If a blob has been found then also write its position in text on the processed image.
         cv.PutText(imgColorProcessed, "Blob X, Y: "+str(posX)+", "+str(posY), (text_x_offset,text_y_offset), font, text_color)
@@ -137,14 +184,23 @@ while True:
     #Put the rest of the text on the processed image.
     cv.PutText(imgColorProcessed, "HSV-range: "+str(hsv_range), (text_x_offset,text_y_offset*2), font, text_color)
     cv.PutText(imgColorProcessed, "Sensitivity: "+str(-1*blob_sensitivity/250), (text_x_offset,text_y_offset*3), font, text_color)
+
     if hsv_tracking:
         cv.PutText(imgColorProcessed, "Hue tracking: On", (text_x_offset,text_y_offset*4), font, text_color)
     else:
         cv.PutText(imgColorProcessed, "Hue tracking: Off", (text_x_offset,text_y_offset*4), font, text_color)
+
+    if video_feed:
+        cv.PutText(imgColorProcessed, "Video: On", (text_x_offset,text_y_offset*5), font, text_color)        
+    else:
+        cv.PutText(imgColorProcessed, "Video: Off", (text_x_offset,text_y_offset*5), font, text_color)        
     
     #Show the processed and original image.
     cv.ShowImage("Processed", imgColorProcessed)
-    cv.ShowImage("Original", frame)
+    if video_feed:
+        cv.ShowImage("Original", frame)
+    else:
+        cv.ShowImage("Original", blank_image)
     
     #Wait for key press, and if a key has been pressed then act accordingly.
     #This function call is very important because it also handles a lot of stuff
@@ -153,12 +209,15 @@ while True:
     #if key > 0:    #Uncomment these lines to output the raw key data,
     #    print key  #useful for when adding more keypresses.
     if key == 1048689: #q, quit
+        SendCommand(0,0) #Stop motors
         break
     if key == 1048692: #t, toggle hue tracking
         hsv_tracking = not hsv_tracking
     if key == 1113938: #up arrow, increase hsv range
         hsv_range+=1
         UpdateTreshold()
+    if key == 1048694: #v, toggle video feed
+        video_feed = not video_feed
     if key == 1113940: #down arrow, decrease hsv range
         hsv_range-=1
         UpdateTreshold()
