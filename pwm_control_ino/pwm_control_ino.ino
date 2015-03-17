@@ -1,3 +1,5 @@
+#include <Servo.h>
+
 #define engine_black 3
 #define engine_red 5
 #define steering_red 6
@@ -8,7 +10,25 @@
 #define left_led 7
 #define right_led 8
 
-int engine_motor[2], steering_motor[2], laser_servos[2];
+int engine_motor[2], steering_motor[2];
+Servo laser_servo_1;
+Servo laser_servo_2;
+
+
+/*MOTOR PINOUT
+G - Vdd
+Y - Gnd
+B - Dir 1
+R - Dir 2
+*/
+
+/*
+Simple protocol
+RS
+00 still
+01 right (forward?)
+10 left  (left?)
+*/
 
 void setup(){
   engine_motor[0] = engine_red;
@@ -17,15 +37,16 @@ void setup(){
   steering_motor[0] = steering_red;
   steering_motor[1] = steering_black;
   
-  laser_servos[0] = laser_x;
-  laser_servos[1] = laser_y;
+  laser_servo_1.attach(laser_x);
+  laser_servo_2.attach(laser_y);
+  
+  laser_servo_1.write(180);
+  laser_servo_2.write(180);
   
   pinMode(engine_motor[0], OUTPUT);
   pinMode(engine_motor[1], OUTPUT);
   pinMode(steering_motor[0], OUTPUT);
   pinMode(steering_motor[1], OUTPUT);
-  pinMode(laser_servos[0], OUTPUT);
-  pinMode(laser_servos[1], OUTPUT);
   
   Serial.begin(9600);
 }
@@ -92,7 +113,17 @@ void executeCommand(String cmd){
         set_motor_value(engine_motor, 0, 0);
         break;
       case 'E': //Extra (for non-movement stuff)
-        set_motor_value(laser_servos, cmd_arg1, cmd_arg2);
+        //Cannot put this in a separate function because of
+        //Arduino IDE limitations
+        if (cmd_arg1>180){
+          cmd_arg1=180;
+        }
+        if (cmd_arg2>180){
+          cmd_arg2=180;
+        }
+  
+        laser_servo_1.write(cmd_arg1);
+        laser_servo_2.write(cmd_arg2);
         break;  //command type OK, move on to check arguments
       default:
         return; //This shouldn't happen
