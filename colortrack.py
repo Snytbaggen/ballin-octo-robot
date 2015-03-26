@@ -8,7 +8,7 @@ import RPi as GPIO
 import cv2.cv as cv
 from pygame.locals import *
 
-global frame, rgbj,LOW_TRESHOLD, HIGH_TRESHOLD, hsv_range, serial, hsvi
+global frame, rgbj,LOW_TRESHOLD, HIGH_TRESHOLD, hsv_range, serial, hsvi, previous_turn, previous_move, previous_turn, move_error
 
 #Serial port setup
 comm.SetSerialPort('/dev/ttyUSB0',9600)
@@ -95,22 +95,41 @@ def UpdateTreshold():
     HIGH_TRESHOLD = [hsvi[0]+hsv_range, hsvi[1]+hsv_range,hsvi[2]+hsv_range]
 
 def CalculateMove(radius):
-    margin = 10
+    global previous_move, move_error
+    Kp = 10
+    Kd = 1
+    Ki = 0
     target = 250
-    if radius > target + margin:
-        return -255
-    elif radius < target - margin:
-        return 255
-    return 0
+    move_current = target - radius
+    move_error += move_current
+    move_value = int(Kp*(move_current) + Kd*(move_current-previous_move)+Ki*(move_error))
+
+    if move_value > 50:
+        move_value = 255
+    elif move_value < -50:
+        move_value = -255
+    else:
+        move_value = 0
+    
+    previous_move = move_current
+    return move_value
 
 def CalculateTurn(pos):
+    global previous_turn
+    Kp=-7
+    Kd=1
     margin = 5
     target = 160/2 #width/2
-    if pos < target - margin:
-        return -255
-    if pos > target + margin:
-        return 255
-    return 0
+    current_turn = target - pos
+    turn_value = Kp*(current_turn) + Kd*(current_turn-previous_turn)
+
+    if turn_value > 255:
+        turn_value = 255
+    elif turn_value < -255:
+        turn_value = -255
+
+    previous_turn = current_turn
+    return turn_value
 
 def CalculateMovement(posX, posY, radius):
     move = CalculateMove(radius)
@@ -123,6 +142,10 @@ def CalculateMovement(posX, posY, radius):
 ##########################
 #Main program starts here#
 ##########################
+
+previous_move = move_error = 0
+previous_turn = 0
+
 capture = cv.CreateCameraCapture(0)
 
 # Over-write default captured image size
@@ -148,23 +171,31 @@ while True:
                 if manual_control:
                     arrow_keys[0] = True
                 else:
+                #Kp += 1
+                #print Kp
                     hsv_range+=1
                     UpdateTreshold()
             if event.key == pygame.K_DOWN:
                 if manual_control:
                     arrow_keys[1] = True
                 else:
+                #Kp -= 1
+                #print Kp
                     hsv_range-=1
                     UpdateTreshold()
             if event.key == pygame.K_LEFT:
                 if manual_control:
                     arrow_keys[2] = True
                 else:
+                #Kd -= 1
+                #print Kd
                     blob_sensitivity += 250
             if event.key == pygame.K_RIGHT:
                 if manual_control:
                     arrow_keys[3] = True
                 else:
+               # Kd += 1
+                #print Kd
                     blob_sensitivity -= 250
 
             if event.key == pygame.K_t:
@@ -234,6 +265,8 @@ while True:
             CalculateMovement(posX, posY, radius)
 #            comm.SendMoveCommand(CalculateMove(radius), CalculateTurn(posX))
 #            comm.SendMoveCommand(move, turn)
+        #else:
+        #    mov = CalculateMove(radius)
 
         #If a blob has been found then also write its position in text on the processed image.
         background.blit(pygamefont.render("blob x, y, r: "+str(posX)+", "+str(posY)+", "+str(radius), 1, (255,255,255)),(text_x_offset,text_y_offset))
