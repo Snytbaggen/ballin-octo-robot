@@ -1,15 +1,17 @@
 # Raspbery Pi Color Tracking and Robot Steering
 # Code by Daniel Haggmyr, with borrowed code from Oscar Liang
 
-import math, serial
+import math, pygame
+import robot_comm as comm #,serial
 import numpy as np
 import RPi as GPIO
 import cv2.cv as cv
+from pygame.locals import *
 
-global frame, rgbj,LOW_TRESHOLD, HIGH_TRESHOLD, hsv_range, serial
+global frame, rgbj,LOW_TRESHOLD, HIGH_TRESHOLD, hsv_range, serial, hsvi
 
 #Serial port setup
-serial = serial.Serial('/dev/ttyUSB0',9600)
+comm.SetSerialPort('/dev/ttyUSB0',9600)
 
 # captured image size
 width = 160
@@ -27,6 +29,8 @@ hsv_tracking = False
 data_on = False
 window_exists = False
 video_feed = True
+manual_control = True
+arrow_keys = [False, False, False, False] #Up Down Left Right
 
 #Text constants and font creation
 hscale = vscale = 0.4
@@ -38,45 +42,19 @@ text_x_offset=5
 text_y_offset=15
 text_color=(128,255,255)
 
-def IntToStr(number):
-    ret = ""
-    if number < 100:
-        ret+= "0"
-        if number < 10:
-            ret +="0"
-    ret += str(number)
-    return ret
+pygame.init()
+screen = pygame.display.set_mode((160,120))
+pygame.display.set_caption ('Data window')
+background = pygame.Surface(screen.get_size())
+background = background.convert()
+background.fill((0,0,0))
 
-def BuildSpeedCommand(speed):
-    cmd = ""
-    if speed >= 0:
-        cmd = "F"
-    else:
-        cmd = "B"
-        speed = -speed
-    if speed > 255:
-        speed = 255
-    cmd+=IntToStr(speed)+"000"
-    return cmd
+pygamefont = pygame.font.Font(None, 20)
+#text = pygamefont.render("Hello", 1, (255,255,255))
+#background.blit(pygamefont.render("Hello", 1, (255,255,255)),(10,10))
+screen.blit(background, (0,0))
+pygame.display.flip()
 
-def BuildTurnCommand(turn):
-    cmd = ""
-    if turn >= 0:
-        cmd = "L"
-    else:
-        cmd = "R"
-        turn = -turn
-    if turn > 255:
-        turn = 255
-    cmd += IntToStr(turn)+"000"
-    return cmd
-
-def SendCommand(speed, turn):
-    global serial
-    serial.write(BuildSpeedCommand(speed).encode('utf-8'))
-    #should wait for OK here
-    serial.write(BuildTurnCommand(turn).encode('utf-8'))
-    #should wait for OK here
 
 #Reads the HSV value in a certain pixel in a given image.
 #This code is modified from the original code Oscar Liang wrote.
@@ -116,6 +94,32 @@ def UpdateTreshold():
     LOW_TRESHOLD = [hsvi[0]-hsv_range, hsvi[1]-hsv_range,hsvi[2]-hsv_range]
     HIGH_TRESHOLD = [hsvi[0]+hsv_range, hsvi[1]+hsv_range,hsvi[2]+hsv_range]
 
+def CalculateMove(radius):
+    margin = 10
+    target = 250
+    if radius > target + margin:
+        return -255
+    elif radius < target - margin:
+        return 255
+    return 0
+
+def CalculateTurn(pos):
+    margin = 5
+    target = 160/2 #width/2
+    if pos < target - margin:
+        return -255
+    if pos > target + margin:
+        return 255
+    return 0
+
+def CalculateMovement(posX, posY, radius):
+    move = CalculateMove(radius)
+    turn = CalculateTurn(posX)
+    if move < 0:
+        turn = -turn
+    comm.SendMoveCommand(move, turn)
+    
+
 ##########################
 #Main program starts here#
 ##########################
@@ -135,6 +139,58 @@ cv.SetMouseCallback("Original",MyMouseCallback)
 #Main loop. Code for fetching and processing the image has been copied and slightly modified from code
 #written by Oscar Liang that was uploaded online
 while True:
+   # pygame.event.pump()
+#    keys = pygame.key.get_pressed()
+    events = pygame.event.get()
+    for event in events:
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_UP:
+                if manual_control:
+                    arrow_keys[0] = True
+                else:
+                    hsv_range+=1
+                    UpdateTreshold()
+            if event.key == pygame.K_DOWN:
+                if manual_control:
+                    arrow_keys[1] = True
+                else:
+                    hsv_range-=1
+                    UpdateTreshold()
+            if event.key == pygame.K_LEFT:
+                if manual_control:
+                    arrow_keys[2] = True
+                else:
+                    blob_sensitivity += 250
+            if event.key == pygame.K_RIGHT:
+                if manual_control:
+                    arrow_keys[3] = True
+                else:
+                    blob_sensitivity -= 250
+
+            if event.key == pygame.K_t:
+                hsv_tracking = not hsv_tracking
+            if event.key == pygame.K_v:
+                video_feed = not video_feed
+            if event.key == pygame.K_m:
+                manual_control = not manual_control
+            if event.key == pygame.K_q:
+                comm.SendMoveCommand(0,0) #Stop motors
+                quit()
+        if event.type == pygame.KEYUP:
+            if event.key == pygame.K_UP:
+                if manual_control:
+                    arrow_keys[0] = False
+            if event.key == pygame.K_DOWN:
+                if manual_control:
+                    arrow_keys[1] = False
+            if event.key == pygame.K_LEFT:
+                if manual_control:
+                    arrow_keys[2] = False
+            if event.key == pygame.K_RIGHT:
+                if manual_control:
+                    arrow_keys[3] = False
+
+    background.fill((0,0,0))
     #Fetch frame and blur it. Copied code starts here.
     frame = cv.QueryFrame(capture)
     cv.Smooth(frame, frame, cv.CV_BLUR, 3)
@@ -172,56 +228,66 @@ while True:
         cv.Circle(frame, (posX, posY), radius/15, (0,0,255), 2,8,0)
 
         #TODO: Put regulation and robot movement here
-        turn = (posX-width/2)*3
-        SendCommand(turn, 0)
+        if not manual_control:
+#            turn = (posX-width/2)*3
+#            move = (300-radius/2)
+            CalculateMovement(posX, posY, radius)
+#            comm.SendMoveCommand(CalculateMove(radius), CalculateTurn(posX))
+#            comm.SendMoveCommand(move, turn)
 
         #If a blob has been found then also write its position in text on the processed image.
-        cv.PutText(imgColorProcessed, "Blob X, Y: "+str(posX)+", "+str(posY), (text_x_offset,text_y_offset), font, text_color)
+        background.blit(pygamefont.render("blob x, y, r: "+str(posX)+", "+str(posY)+", "+str(radius), 1, (255,255,255)),(text_x_offset,text_y_offset))
     else:
         #If a blob haven't been found then indicate that by writing "N/A" instead of position data.
-        cv.PutText(imgColorProcessed, "Blob X, Y: N/A", (text_x_offset,text_y_offset), font, (128,255,255))
+        background.blit(pygamefont.render("blob x, y: N/A", 1, (255,255,255)),(text_x_offset,text_y_offset))
+        comm.SendMoveCommand(0,0)
 
-    #Put the rest of the text on the processed image.
-    cv.PutText(imgColorProcessed, "HSV-range: "+str(hsv_range), (text_x_offset,text_y_offset*2), font, text_color)
-    cv.PutText(imgColorProcessed, "Sensitivity: "+str(-1*blob_sensitivity/250), (text_x_offset,text_y_offset*3), font, text_color)
+    #Write the rest of the information
+    background.blit(pygamefont.render("hsv-range: "+str(hsv_range), 1, (255,255,255)),(text_x_offset,text_y_offset*2))
+    background.blit(pygamefont.render("sensitivity: "+str(-1*blob_sensitivity/250), 1, (255,255,255)),(text_x_offset,text_y_offset*3))
 
     if hsv_tracking:
-        cv.PutText(imgColorProcessed, "Hue tracking: On", (text_x_offset,text_y_offset*4), font, text_color)
+        background.blit(pygamefont.render("hue Tracking: on", 1, (255,255,255)),(text_x_offset,text_y_offset*4))
     else:
-        cv.PutText(imgColorProcessed, "Hue tracking: Off", (text_x_offset,text_y_offset*4), font, text_color)
+        background.blit(pygamefont.render("hue Tracking: off", 1, (255,255,255)),(text_x_offset,text_y_offset*4))
 
     if video_feed:
-        cv.PutText(imgColorProcessed, "Video: On", (text_x_offset,text_y_offset*5), font, text_color)        
+        background.blit(pygamefont.render("Video: on", 1, (255,255,255)),(text_x_offset,text_y_offset*5))    
     else:
-        cv.PutText(imgColorProcessed, "Video: Off", (text_x_offset,text_y_offset*5), font, text_color)        
+        background.blit(pygamefont.render("Video: off", 1, (255,255,255)),(text_x_offset,text_y_offset*5))
     
+    if manual_control:
+        background.blit(pygamefont.render("Manual control: on", 1, (255,255,255)),(text_x_offset,text_y_offset*6))        
+    else:
+        background.blit(pygamefont.render("Manual control: off", 1, (255,255,255)),(text_x_offset,text_y_offset*6))  
+
+    screen.blit(background, (0,0))
+    pygame.display.flip()
+
+    if manual_control:
+        keys = pygame.key.get_pressed()
+        turn = move = 0
+        if arrow_keys[0]: #up
+            move = 255
+        elif arrow_keys[1]: #down
+            move = -255
+        if arrow_keys[2]: #left
+            turn = -255
+        elif arrow_keys[3]: #right
+            turn = 255
+        comm.SendMoveCommand(move, turn)
+
     #Show the processed and original image.
     cv.ShowImage("Processed", imgColorProcessed)
     if video_feed:
         cv.ShowImage("Original", frame)
     else:
         cv.ShowImage("Original", blank_image)
+
+    #arrow_keys = [False, False, False, False]
     
     #Wait for key press, and if a key has been pressed then act accordingly.
     #This function call is very important because it also handles a lot of stuff
     #regarding the windows.
-    key = cv.WaitKey(10)
-    #if key > 0:    #Uncomment these lines to output the raw key data,
-    #    print key  #useful for when adding more keypresses.
-    if key == 1048689: #q, quit
-        SendCommand(0,0) #Stop motors
-        break
-    if key == 1048692: #t, toggle hue tracking
-        hsv_tracking = not hsv_tracking
-    if key == 1113938: #up arrow, increase hsv range
-        hsv_range+=1
-        UpdateTreshold()
-    if key == 1048694: #v, toggle video feed
-        video_feed = not video_feed
-    if key == 1113940: #down arrow, decrease hsv range
-        hsv_range-=1
-        UpdateTreshold()
-    if key == 1113937: #left arrow, increase detection sensitivity (detects smaller blobs)
-        blob_sensitivity += 250
-    if key == 1113939: #right arrow, decrease detection sensitivity (ignores smaller blobs)
-        blob_sensitivity -= 250
+    pygame.event.pump()
+    key = cv.WaitKey(1)

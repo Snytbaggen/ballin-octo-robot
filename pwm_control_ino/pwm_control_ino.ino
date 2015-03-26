@@ -2,7 +2,7 @@
 
 #define engine_black 3
 #define engine_red 5
-#define steering_red 6
+#define steering_yellow 6
 #define steering_black 9
 #define laser_x 10
 #define laser_y 11
@@ -15,11 +15,18 @@ Servo laser_servo_1;
 Servo laser_servo_2;
 
 
-/*MOTOR PINOUT
+/*
+ENGINE MOTOR PINOUT
 G - Vdd
 Y - Gnd
 B - Dir 1
 R - Dir 2
+
+STEERING MOTOR PINOUT
+G - Vdd
+Y - Dir 1
+B - Dir 2
+R - Gnd
 */
 
 /*
@@ -31,10 +38,10 @@ RS
 */
 
 void setup(){
-  engine_motor[0] = engine_red;
-  engine_motor[1] = engine_black;
+  engine_motor[0] = engine_black;
+  engine_motor[1] = engine_red;
   
-  steering_motor[0] = steering_red;
+  steering_motor[0] = steering_yellow;
   steering_motor[1] = steering_black;
   
   laser_servo_1.attach(laser_x);
