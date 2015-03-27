@@ -1,14 +1,16 @@
 #include <Servo.h>
 
-#define engine_black 3
-#define engine_red 5
-#define steering_yellow 6
-#define steering_black 9
+#define engine_black 9
+#define engine_red 6
+#define steering_yellow 5
+#define steering_black 3
 #define laser_x 10
 #define laser_y 11
 #define laser 4
 #define left_led 7
 #define right_led 8
+
+//9 6 5 3
 
 int engine_motor[2], steering_motor[2];
 Servo laser_servo_1;
