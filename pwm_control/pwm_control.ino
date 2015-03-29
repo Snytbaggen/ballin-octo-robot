@@ -4,15 +4,15 @@
 #define engine_red 6
 #define steering_yellow 5
 #define steering_black 3
-#define laser_x 10
-#define laser_y 11
 #define laser 4
-#define left_led 7
-#define right_led 8
+#define left_upper_led A1
+#define left_lower_led A0
+#define right_upper_led 7
+#define right_lower_led 8
 
 //9 6 5 3
 
-int engine_motor[2], steering_motor[2];
+int engine_motor[2], steering_motor[2], headlights[4];
 Servo laser_servo_1;
 Servo laser_servo_2;
 
@@ -46,16 +46,19 @@ void setup(){
   steering_motor[0] = steering_yellow;
   steering_motor[1] = steering_black;
   
-  laser_servo_1.attach(laser_x);
-  laser_servo_2.attach(laser_y);
-  
-  laser_servo_1.write(180);
-  laser_servo_2.write(180);
+  headlights[0] = left_upper_led;
+  headlights[1] = left_lower_led;
+  headlights[2] = right_upper_led;
+  headlights[3] = right_lower_led;
   
   pinMode(engine_motor[0], OUTPUT);
   pinMode(engine_motor[1], OUTPUT);
   pinMode(steering_motor[0], OUTPUT);
   pinMode(steering_motor[1], OUTPUT);
+  pinMode(headlights[0], OUTPUT);
+  pinMode(headlights[1], OUTPUT);
+  pinMode(headlights[2], OUTPUT);
+  pinMode(headlights[3], OUTPUT);
   
   Serial.begin(9600);
 }
@@ -84,7 +87,7 @@ boolean isValidCommand(String cmd){
       case 'L': //Left
       case 'R': //Right
       case 'S': //Stop
-      case 'E': //Extra (for non-movement stuff)
+      case 'H': //Lamps
         break;  //command type OK, move on to check arguments
       default:
         return false;
@@ -121,18 +124,15 @@ void executeCommand(String cmd){
         set_motor_value(steering_motor, 0, 0);
         set_motor_value(engine_motor, 0, 0);
         break;
-      case 'E': //Extra (for non-movement stuff)
-        //Cannot put this in a separate function because of
-        //Arduino IDE limitations
-        if (cmd_arg1>180){
-          cmd_arg1=180;
+      case 'H': //Extra (for non-movement stuff)
+        for (int i=0; i<4; i++){
+          char led_val = cmd[i+1];
+          if (led_val == '0')
+            digitalWrite(headlights[i], LOW);
+          else
+            digitalWrite(headlights[i], HIGH);
         }
-        if (cmd_arg2>180){
-          cmd_arg2=180;
-        }
-  
-        laser_servo_1.write(cmd_arg1);
-        laser_servo_2.write(cmd_arg2);
+        
         break;  //command type OK, move on to check arguments
       default:
         return; //This shouldn't happen
