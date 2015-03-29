@@ -1,0 +1,49 @@
+ENKELT PROTOKOLL:
+
+Total längd: 7 tecken
+Struktur: 1 instruktionstecken följt av 6 nummer.
+
+
+I tabellen nedan betyder 'X' en godtycklig siffra och '-' don't care.
+
+ INSTR | VÄRDEN | BESKRIVNING
+-----------------------------
+   F   | XXX--- | Flyttar roboten framåt genom PWM med en hastighet mellan 0-255,
+       |        | där 0 är stillastående och 255 full hastighet.
+---------------------------------------------------------------------------------
+   B   | XXX--- | Flyttar roboten framåt genom PWM med en hastighet mellan 0-255,
+       |        | där 0 är stillastående och 255 full hastighet.
+---------------------------------------------------------------------------------
+   L   | XXX--- | Vinklar de främre hjulen vänster genom PWM med ett värde mellan
+       |        | 0-255, där 0 är stillastående och 255 fullt utslag vänster.
+---------------------------------------------------------------------------------
+   R   | XXX--- | Vinklar de främre hjulen höger genom PWM med ett värde mellan
+       |        | 0-255, där 0 är stillastående och 255 fullt utslag höger.
+---------------------------------------------------------------------------------
+   S   | ------ | Stoppar robotens motorer.
+---------------------------------------------------------------------------------
+   H   | XXXX-- | Sätter på eller stänger av strålkastarna i ordningen vänster upp,
+       |        | vänster ner, höger upp och höger ner beroende på de fyra första
+       |        | siffrorna. Siffran 0 stänger av lampan i motsvarande position
+       |        | och övriga siffror sätter på lampan.
+
+
+
+EXEMPEL:
+F255000 - Förflytta roboten framåt i maximal hastighet.
+L128000 - Sväng vänster med halvt utslag
+H001000 - Sätt på den övre högra lampan, släck övriga.
+
+FELKONTROLL:
+När arduinon tagit emot 7 tecken kommer den svara med ett 'K' om kommandot är
+giltigt och 'F' om det inte är det. Den kan dock inte läsa in ett halvt kommando
+och avgöra om det är fel, så den kommer alltid vänta tills den läst 7 tecken.
+Detta medför att om man skulle råka skicka fler eller färre än sju bitar finns
+en risk att man hamnar ur synk med arduinon och aldrig får svar, eller bara 'F'.
+
+KOMMENTARER:
+Från början fanns en plan att med ett kommando kunna ställa in två servon där
+vardera servo krävde tre värdesiffror, därav den totala längden på 7 tecken.
+Dessa servon kom dock aldrig att användas på grund av plats- och tidsbrist men
+instruktionslängden är kvar, och om man skulle vilja utöka roboten eller lägga
+till servona i framtiden behövs inte protokollängden utökas.
