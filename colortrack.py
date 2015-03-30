@@ -8,7 +8,7 @@ import RPi as GPIO
 import cv2.cv as cv
 from pygame.locals import *
 
-global frame, rgbj,LOW_TRESHOLD, HIGH_TRESHOLD, hsv_range, serial, hsvi, previous_turn, previous_move, previous_turn, move_error
+global frame, rgbj,LOW_TRESHOLD, HIGH_TRESHOLD, hsv_range, comm, serial, hsvi, previous_turn, size_error_preivous, size_error_integral, previous_turn, Kp, Kd, Ki
 
 #Serial port setup
 comm.SetSerialPort('/dev/ttyUSB0',9600)
@@ -50,8 +50,6 @@ background = background.convert()
 background.fill((0,0,0))
 
 pygamefont = pygame.font.Font(None, 20)
-#text = pygamefont.render("Hello", 1, (255,255,255))
-#background.blit(pygamefont.render("Hello", 1, (255,255,255)),(10,10))
 screen.blit(background, (0,0))
 pygame.display.flip()
 
@@ -95,24 +93,27 @@ def UpdateTreshold():
     HIGH_TRESHOLD = [hsvi[0]+hsv_range, hsvi[1]+hsv_range,hsvi[2]+hsv_range]
 
 def CalculateMove(radius):
-    global previous_move, move_error
-    Kp = 10
-    Kd = 1
-    Ki = 0
-    target = 250
-    move_current = target - radius
-    move_error += move_current
-    move_value = int(Kp*(move_current) + Kd*(move_current-previous_move)+Ki*(move_error))
+    global size_error_previous, size_error_integral, Kp, Kd, Ki
+    
+    target_size = 250
+    cutoff = 40
 
-    if move_value > 50:
+    size_error_current = target_size - radius
+    size_error_derivative = size_error_current-size_error_previous
+    size_error_integral += size_error_current
+
+    move_value = int(Kp * size_error_current + Kd * size_error_derivative + Ki * size_error_integral)
+    
+    if move_value > cutoff:
         move_value = 255
-    elif move_value < -50:
+    elif move_value < -cutoff:
         move_value = -255
     else:
         move_value = 0
-    
-    previous_move = move_current
+
+    size_error_previous = size_error_current
     return move_value
+    
 
 def CalculateTurn(pos):
     global previous_turn
@@ -120,13 +121,16 @@ def CalculateTurn(pos):
     Kd=1
     margin = 5
     target = 160/2 #width/2
+    cutoff = 50
     current_turn = target - pos
     turn_value = Kp*(current_turn) + Kd*(current_turn-previous_turn)
-
-    if turn_value > 255:
+    
+    if turn_value > cutoff:
         turn_value = 255
-    elif turn_value < -255:
+    elif turn_value < -cutoff:
         turn_value = -255
+    else:
+        turn_value = 0
 
     previous_turn = current_turn
     return turn_value
@@ -137,14 +141,24 @@ def CalculateMovement(posX, posY, radius):
     if move < 0:
         turn = -turn
     comm.SendMoveCommand(move, turn)
+
+def exit_program():
+    global comm
+    comm.SendMoveCommand(0,0)
+    comm.Disconnect()
+    quit()
     
 
 ##########################
 #Main program starts here#
 ##########################
 
-previous_move = move_error = 0
+size_error_previous = size_error_integral = 0
 previous_turn = 0
+Kp = 1
+Kd = 10
+Ki = 0.0
+
 
 capture = cv.CreateCameraCapture(0)
 
@@ -171,31 +185,23 @@ while True:
                 if manual_control:
                     arrow_keys[0] = True
                 else:
-                #Kp += 1
-                #print Kp
                     hsv_range+=1
                     UpdateTreshold()
             if event.key == pygame.K_DOWN:
                 if manual_control:
                     arrow_keys[1] = True
                 else:
-                #Kp -= 1
-                #print Kp
                     hsv_range-=1
                     UpdateTreshold()
             if event.key == pygame.K_LEFT:
                 if manual_control:
                     arrow_keys[2] = True
                 else:
-                #Kd -= 1
-                #print Kd
                     blob_sensitivity += 250
             if event.key == pygame.K_RIGHT:
                 if manual_control:
                     arrow_keys[3] = True
                 else:
-               # Kd += 1
-                #print Kd
                     blob_sensitivity -= 250
 
             if event.key == pygame.K_t:
@@ -205,8 +211,21 @@ while True:
             if event.key == pygame.K_m:
                 manual_control = not manual_control
             if event.key == pygame.K_q:
-                comm.SendMoveCommand(0,0) #Stop motors
-                quit()
+                exit_program()
+
+            if event.key == pygame.K_KP7:
+                Kp += 1
+            if event.key == pygame.K_KP4:
+                Kp -= 1
+            if event.key == pygame.K_KP8:
+                Ki += 0.1
+            if event.key == pygame.K_KP5:
+                Ki -= 0.1
+            if event.key == pygame.K_KP9:
+                Kd += 1
+            if event.key == pygame.K_KP6:
+                Kd -= 1
+
         if event.type == pygame.KEYUP:
             if event.key == pygame.K_UP:
                 if manual_control:
@@ -260,13 +279,7 @@ while True:
 
         #TODO: Put regulation and robot movement here
         if not manual_control:
-#            turn = (posX-width/2)*3
-#            move = (300-radius/2)
             CalculateMovement(posX, posY, radius)
-#            comm.SendMoveCommand(CalculateMove(radius), CalculateTurn(posX))
-#            comm.SendMoveCommand(move, turn)
-        #else:
-        #    mov = CalculateMove(radius)
 
         #If a blob has been found then also write its position in text on the processed image.
         background.blit(pygamefont.render("blob x, y, r: "+str(posX)+", "+str(posY)+", "+str(radius), 1, (255,255,255)),(text_x_offset,text_y_offset))
@@ -274,6 +287,8 @@ while True:
         #If a blob haven't been found then indicate that by writing "N/A" instead of position data.
         background.blit(pygamefont.render("blob x, y: N/A", 1, (255,255,255)),(text_x_offset,text_y_offset))
         comm.SendMoveCommand(0,0)
+
+        size_error_previous = size_error_integral = 0 #Also reset the regulation variables to avoid junk data later
 
     #Write the rest of the information
     background.blit(pygamefont.render("hsv-range: "+str(hsv_range), 1, (255,255,255)),(text_x_offset,text_y_offset*2))
@@ -293,6 +308,8 @@ while True:
         background.blit(pygamefont.render("Manual control: on", 1, (255,255,255)),(text_x_offset,text_y_offset*6))        
     else:
         background.blit(pygamefont.render("Manual control: off", 1, (255,255,255)),(text_x_offset,text_y_offset*6))  
+
+    #background.blit(pygamefont.render("PID: "+str(Kp) + ", " + str(Ki) + ", " + str(Kd), 1, (255,255,255)), (text_x_offset, text_y_offset*7))
 
     screen.blit(background, (0,0))
     pygame.display.flip()

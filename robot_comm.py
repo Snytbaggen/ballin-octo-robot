@@ -71,3 +71,7 @@ def SendMoveCommand(speed, turn):
 
 def SendExtraCommand(val1, val2):
     SendCommand(BuildExtraCommand(val1, val2).encode('utf-8'))
+
+def Disconnect():
+    global serial_comm
+    serial_comm.close()
