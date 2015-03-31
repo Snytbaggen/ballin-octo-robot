@@ -60,7 +60,7 @@ void setup(){
   pinMode(headlights[2], OUTPUT);
   pinMode(headlights[3], OUTPUT);
   
-  Serial.begin(9600);
+  Serial.begin(19200);
 }
 
 void loop(){
