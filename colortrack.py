@@ -8,10 +8,10 @@ import RPi as GPIO
 import cv2.cv as cv
 from pygame.locals import *
 
-global frame, rgbj,LOW_TRESHOLD, HIGH_TRESHOLD, hsv_range, comm, serial, hsvi, previous_turn, size_error_preivous, size_error_integral, previous_turn, Kp, Kd, Ki
+global frame, rgbj,LOW_TRESHOLD, HIGH_TRESHOLD, hsv_range, comm, serial, hsvi, previous_turn, size_error_previous, position_error_previous
 
 #Serial port setup
-comm.SetSerialPort('/dev/ttyUSB0',9600)
+comm.SetSerialPort('/dev/ttyUSB0',19200)
 
 # captured image size
 width = 160
@@ -92,17 +92,25 @@ def UpdateTreshold():
     LOW_TRESHOLD = [hsvi[0]-hsv_range, hsvi[1]-hsv_range,hsvi[2]-hsv_range]
     HIGH_TRESHOLD = [hsvi[0]+hsv_range, hsvi[1]+hsv_range,hsvi[2]+hsv_range]
 
+#Calculates if the robot should move forward or not depending on the size of the ball.
+#A simple PD controller is used for this, with the values Kp and Kd chosen by experimentation.
+#Just a P controller is probably sufficient with good lighting (and a fast connection),
+#but increasing the Kd value might be a good idea if there is a low framerate and/or
+#a long input delay from the camera. Because of weak motors no PWM is used, the motor is
+#set to either full speed or full stop. 
 def CalculateMove(radius):
-    global size_error_previous, size_error_integral, Kp, Kd, Ki
+    global size_error_previous
+    Kp = 1
+    Kd = 10
+
     
-    target_size = 250
-    cutoff = 40
+    target_size = 250 #Target radius for the ball, chosen by experiment
+    cutoff = 40 #Cutoff to counter "jitter" in the size, chosen by experiment 
 
     size_error_current = target_size - radius
     size_error_derivative = size_error_current-size_error_previous
-    size_error_integral += size_error_current
 
-    move_value = int(Kp * size_error_current + Kd * size_error_derivative + Ki * size_error_integral)
+    move_value = Kp * size_error_current + Kd * size_error_derivative
     
     if move_value > cutoff:
         move_value = 255
@@ -114,17 +122,25 @@ def CalculateMove(radius):
     size_error_previous = size_error_current
     return move_value
     
+#Calculates if the robot should turn or not depending on the X-position of the ball.
+#A simple PD controller is used for this, with the vaules Kp and Kd chosen by experimentation.
+#Just a P controller is probably sufficient with good lighting (and a fast connection),
+#but increasing the Kd value might be a good idea if there is a low framerate and/or
+#a long input delay from the camera. Because of weak motors no PWM is used, the motor is
+#set to either full speed or full stop. 
+def CalculateTurn(current_position):
+    global position_error_previous
+    Kp = -4
+    Kd = -2
 
-def CalculateTurn(pos):
-    global previous_turn
-    Kp=-7
-    Kd=1
-    margin = 5
-    target = 160/2 #width/2
+    target_position = 160/2 #width/2
     cutoff = 50
-    current_turn = target - pos
-    turn_value = Kp*(current_turn) + Kd*(current_turn-previous_turn)
-    
+
+    position_error_current = target_position - current_position
+    position_error_derivative = position_error_current - position_error_previous
+
+    turn_value = Kp * position_error_current + Kd * position_error_derivative
+
     if turn_value > cutoff:
         turn_value = 255
     elif turn_value < -cutoff:
@@ -132,7 +148,7 @@ def CalculateTurn(pos):
     else:
         turn_value = 0
 
-    previous_turn = current_turn
+    position_error_previous = position_error_current
     return turn_value
 
 def CalculateMovement(posX, posY, radius):
@@ -140,6 +156,12 @@ def CalculateMovement(posX, posY, radius):
     turn = CalculateTurn(posX)
     if move < 0:
         turn = -turn
+
+    #If the ball is far down the area is smaller so the robot
+    #thinks it's far away, a cutoff is added when the ball position
+    #is too far down
+    if posY > 85:
+        move = 0
     comm.SendMoveCommand(move, turn)
 
 def exit_program():
@@ -153,12 +175,9 @@ def exit_program():
 #Main program starts here#
 ##########################
 
-size_error_previous = size_error_integral = 0
+size_error_previous = 0
+position_error_previous = 0
 previous_turn = 0
-Kp = 1
-Kd = 10
-Ki = 0.0
-
 
 capture = cv.CreateCameraCapture(0)
 
@@ -176,8 +195,6 @@ cv.SetMouseCallback("Original",MyMouseCallback)
 #Main loop. Code for fetching and processing the image has been copied and slightly modified from code
 #written by Oscar Liang that was uploaded online
 while True:
-   # pygame.event.pump()
-#    keys = pygame.key.get_pressed()
     events = pygame.event.get()
     for event in events:
         if event.type == pygame.KEYDOWN:
@@ -218,12 +235,8 @@ while True:
             if event.key == pygame.K_KP4:
                 Kp -= 1
             if event.key == pygame.K_KP8:
-                Ki += 0.1
-            if event.key == pygame.K_KP5:
-                Ki -= 0.1
-            if event.key == pygame.K_KP9:
                 Kd += 1
-            if event.key == pygame.K_KP6:
+            if event.key == pygame.K_KP5:
                 Kd -= 1
 
         if event.type == pygame.KEYUP:
@@ -309,7 +322,7 @@ while True:
     else:
         background.blit(pygamefont.render("Manual control: off", 1, (255,255,255)),(text_x_offset,text_y_offset*6))  
 
-    #background.blit(pygamefont.render("PID: "+str(Kp) + ", " + str(Ki) + ", " + str(Kd), 1, (255,255,255)), (text_x_offset, text_y_offset*7))
+    #background.blit(pygamefont.render("PD: "+str(Kp) + ", " + str(Kd), 1, (255,255,255)), (text_x_offset, text_y_offset*7))
 
     screen.blit(background, (0,0))
     pygame.display.flip()

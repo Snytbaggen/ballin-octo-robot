@@ -56,14 +56,16 @@ def BuildExtraCommand(val1, val2):
 def SendCommand(cmd):
     global serial_comm
     serial_comm.write(cmd)
- #   answer = serial.read()
+#    print cmd
+ #   answer = serial_comm.read()
     answer = 'K'
     if answer == 'K':
+#        print "command successful"
         return
     elif answer == 'F':
-        print("Faulty command, sending again\n")
+        print "Faulty command, sending again"
     else:
-        print("Unknown error, sending again\n")
+        print "Unknown error, sending again" 
 
 def SendMoveCommand(speed, turn):
     SendCommand(BuildSpeedCommand(speed).encode('utf-8'))
