@@ -167,6 +167,7 @@ def CalculateMovement(posX, posY, radius):
 def exit_program():
     global comm
     comm.SendMoveCommand(0,0)
+    comm.HeadlightsOff()
     comm.Disconnect()
     quit()
     
@@ -191,6 +192,8 @@ cv.NamedWindow( "Processed", 1 )
 
 #Set mouse callback to the unprocessed window
 cv.SetMouseCallback("Original",MyMouseCallback)
+
+comm.HeadlightsOn()
 
 #Main loop. Code for fetching and processing the image has been copied and slightly modified from code
 #written by Oscar Liang that was uploaded online

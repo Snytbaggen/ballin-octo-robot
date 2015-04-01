@@ -5,6 +5,7 @@ global serial_comm
 def SetSerialPort(port, baudrate):
     global serial_comm
     serial_comm = serial.Serial(port, baudrate)
+    serial_comm.open()
 
 def IntToStr(number):
     ret = ""
@@ -73,6 +74,12 @@ def SendMoveCommand(speed, turn):
 
 def SendExtraCommand(val1, val2):
     SendCommand(BuildExtraCommand(val1, val2).encode('utf-8'))
+
+def HeadlightsOn():
+    SendCommand("H111100".encode('utf-8'))
+
+def HeadlightsOff():
+    SendCommand("H000000".encode('utf-8'))
 
 def Disconnect():
     global serial_comm
