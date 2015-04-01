@@ -1,7 +1,7 @@
 # Raspbery Pi Color Tracking and Robot Steering
 # Code by Daniel Haggmyr, with borrowed code from Oscar Liang
 
-import math, pygame
+import math, pygame, time
 import robot_comm as comm #,serial
 import numpy as np
 import RPi as GPIO
@@ -12,6 +12,7 @@ global frame, rgbj,LOW_TRESHOLD, HIGH_TRESHOLD, hsv_range, comm, serial, hsvi, p
 
 #Serial port setup
 comm.SetSerialPort('/dev/ttyUSB0',19200)
+time.sleep(2)
 
 # captured image size
 width = 160
@@ -30,6 +31,7 @@ data_on = False
 window_exists = False
 video_feed = True
 manual_control = True
+headlights_on = False
 arrow_keys = [False, False, False, False] #Up Down Left Right
 
 #Text constants and font creation
@@ -194,6 +196,7 @@ cv.NamedWindow( "Processed", 1 )
 cv.SetMouseCallback("Original",MyMouseCallback)
 
 comm.HeadlightsOn()
+headlights_on = True
 
 #Main loop. Code for fetching and processing the image has been copied and slightly modified from code
 #written by Oscar Liang that was uploaded online
@@ -230,6 +233,12 @@ while True:
                 video_feed = not video_feed
             if event.key == pygame.K_m:
                 manual_control = not manual_control
+            if event.key == pygame.K_h:
+                if (headlights_on):
+                    comm.HeadlightsOff()
+                else:
+                    comm.HeadlightsOn()
+                headlights_on = not headlights_on
             if event.key == pygame.K_q:
                 exit_program()
 
@@ -298,34 +307,36 @@ while True:
             CalculateMovement(posX, posY, radius)
 
         #If a blob has been found then also write its position in text on the processed image.
-        background.blit(pygamefont.render("blob x, y, r: "+str(posX)+", "+str(posY)+", "+str(radius), 1, (255,255,255)),(text_x_offset,text_y_offset))
+        background.blit(pygamefont.render("blob x, y, r: "+str(posX)+", "+str(posY)+", "+str(radius), 1, (255,255,255)),(text_x_offset,text_y_offset-10))
     else:
         #If a blob haven't been found then indicate that by writing "N/A" instead of position data.
-        background.blit(pygamefont.render("blob x, y: N/A", 1, (255,255,255)),(text_x_offset,text_y_offset))
+        background.blit(pygamefont.render("blob x, y: N/A", 1, (255,255,255)),(text_x_offset,text_y_offset-10))
         comm.SendMoveCommand(0,0)
 
         size_error_previous = size_error_integral = 0 #Also reset the regulation variables to avoid junk data later
 
     #Write the rest of the information
-    background.blit(pygamefont.render("hsv-range: "+str(hsv_range), 1, (255,255,255)),(text_x_offset,text_y_offset*2))
-    background.blit(pygamefont.render("sensitivity: "+str(-1*blob_sensitivity/250), 1, (255,255,255)),(text_x_offset,text_y_offset*3))
+    background.blit(pygamefont.render("hsv-range: "+str(hsv_range), 1, (255,255,255)),(text_x_offset,text_y_offset*2-10))
+    background.blit(pygamefont.render("sensitivity: "+str(-1*blob_sensitivity/250), 1, (255,255,255)),(text_x_offset,text_y_offset*3-10))
 
     if hsv_tracking:
-        background.blit(pygamefont.render("hue Tracking: on", 1, (255,255,255)),(text_x_offset,text_y_offset*4))
+        background.blit(pygamefont.render("hue Tracking: on", 1, (255,255,255)),(text_x_offset,text_y_offset*4-10))
     else:
-        background.blit(pygamefont.render("hue Tracking: off", 1, (255,255,255)),(text_x_offset,text_y_offset*4))
+        background.blit(pygamefont.render("hue Tracking: off", 1, (255,255,255)),(text_x_offset,text_y_offset*4-10))
 
     if video_feed:
-        background.blit(pygamefont.render("Video: on", 1, (255,255,255)),(text_x_offset,text_y_offset*5))    
+        background.blit(pygamefont.render("Video: on", 1, (255,255,255)),(text_x_offset,text_y_offset*5-10))    
     else:
-        background.blit(pygamefont.render("Video: off", 1, (255,255,255)),(text_x_offset,text_y_offset*5))
+        background.blit(pygamefont.render("Video: off", 1, (255,255,255)),(text_x_offset,text_y_offset*5-10))
     
     if manual_control:
-        background.blit(pygamefont.render("Manual control: on", 1, (255,255,255)),(text_x_offset,text_y_offset*6))        
+        background.blit(pygamefont.render("Manual control: on", 1, (255,255,255)),(text_x_offset,text_y_offset*6-10))        
     else:
-        background.blit(pygamefont.render("Manual control: off", 1, (255,255,255)),(text_x_offset,text_y_offset*6))  
-
-    #background.blit(pygamefont.render("PD: "+str(Kp) + ", " + str(Kd), 1, (255,255,255)), (text_x_offset, text_y_offset*7))
+        background.blit(pygamefont.render("Manual control: off", 1, (255,255,255)),(text_x_offset,text_y_offset*6-10))  
+    if headlights_on:
+        background.blit(pygamefont.render("Headlights: on", 1, (255,255,255)), (text_x_offset, text_y_offset*7-10))
+    else:
+        background.blit(pygamefont.render("Headlights: off", 1, (255,255,255)), (text_x_offset, text_y_offset*7-10))
 
     screen.blit(background, (0,0))
     pygame.display.flip()
@@ -356,4 +367,4 @@ while True:
     #This function call is very important because it also handles a lot of stuff
     #regarding the windows.
     pygame.event.pump()
-    key = cv.WaitKey(1)
+    key = cv.WaitKey(50)
