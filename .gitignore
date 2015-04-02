@@ -30,3 +30,7 @@
 
 # Annoying Python stuff
 *.py~
+*.pyc
+
+# Annoying irrelevant Eagle stuff
+*.b#1
