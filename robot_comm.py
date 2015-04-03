@@ -1,6 +1,7 @@
 import serial
 
 global serial_comm
+previous_move = previous_turn = 0
 
 def SetSerialPort(port, baudrate):
     global serial_comm
@@ -23,16 +24,16 @@ def FormatExtraCommandValue(val):
         val = 999
     return val
 
-def BuildSpeedCommand(speed):
+def BuildMoveCommand(move):
     cmd = ""
-    if speed >= 0:
+    if move >= 0:
         cmd = "F"
     else:
         cmd = "B"
-        speed = -speed
-    if speed > 255:
-        speed = 255
-    cmd+=IntToStr(speed)+"000"
+        move = -move
+    if move > 255:
+        move = 255
+    cmd+=IntToStr(move)+"000"
     return cmd
 
 def BuildTurnCommand(turn):
@@ -68,9 +69,17 @@ def SendCommand(cmd):
         #This should never happen
         print "ERROR: Unknown answer from robot (" + answer + ") when sending command " + cmd
 
-def SendMoveCommand(speed, turn):
-    SendCommand(BuildSpeedCommand(speed).encode('utf-8'))
-    SendCommand(BuildTurnCommand(turn).encode('utf-8'))
+def SendMoveCommand(move, turn):
+    global previous_move, previous_turn
+    
+    #Only send if the new values differs from the last ones, resending the same value will
+    #do nothing since the robot is already moving/turning in that direction with that speed
+    if move != previous_move:
+        SendCommand(BuildMoveCommand(move).encode('utf-8'))
+    if turn != previous_turn:
+        SendCommand(BuildTurnCommand(turn).encode('utf-8'))
+    previous_move = move
+    previous_turn = turn
 
 def SendExtraCommand(val1, val2):
     SendCommand(BuildExtraCommand(val1, val2).encode('utf-8'))
