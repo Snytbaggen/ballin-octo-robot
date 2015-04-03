@@ -8,11 +8,11 @@ import RPi as GPIO
 import cv2.cv as cv
 from pygame.locals import *
 
-global frame, rgbj,LOW_TRESHOLD, HIGH_TRESHOLD, hsv_range, comm, serial, hsvi, previous_turn, size_error_previous, position_error_previous
+#global frame, rgbj,LOW_TRESHOLD, HIGH_TRESHOLD, hsv_range, comm, serial, hsvi, previous_turn, size_error_previous, position_error_previous
 
 #Serial port setup
 comm.SetSerialPort('/dev/ttyUSB0',19200)
-time.sleep(2)
+time.sleep(2) #some delay necessary to prevent starting to talk with the arduino too fast
 
 # captured image size
 width = 160
@@ -131,11 +131,11 @@ def CalculateMove(radius):
 #a long input delay from the camera. Because of weak motors no PWM is used, the motor is
 #set to either full speed or full stop. 
 def CalculateTurn(current_position):
-    global position_error_previous
+    global position_error_previous, width
     Kp = -4
     Kd = -2
 
-    target_position = 160/2 #width/2
+    target_position = width/2 #width/2
     cutoff = 50
 
     position_error_current = target_position - current_position

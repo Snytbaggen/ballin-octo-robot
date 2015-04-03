@@ -95,11 +95,11 @@ boolean isValidCommand(String cmd){
     int cmd_arg1 = cmd.substring(1,4).toInt();
     int cmd_arg2 = cmd.substring(4).toInt();
     if (cmd_arg1 <= 255 && cmd_arg2 <= 255){
-      Serial.println("K"); //Arguments looks OK, sent ack
+      Serial.print("K"); //Arguments looks OK, sent ack
       return true;
     }
   }
-  Serial.println("F"); //Something wrong, notify sender
+  Serial.print("F"); //Something wrong, notify sender
   return false;
 }
 
