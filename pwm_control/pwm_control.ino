@@ -92,16 +92,19 @@ boolean isValidCommand(String cmd){
       case 'B': //Backward
       case 'L': //Left
       case 'R': //Right
-      case 'S': //Stop0
-      {
-        //Read the argument. Only the first group of 3 matters.
-        int cmd_arg = cmd.substring(1,4).toInt();
-        if (cmd_arg <= 255){
-          Serial.print("K"); //Argument looks OK, send ack
-          return true;
+        {
+          //Read the argument. Only the first group of 3 matters.
+          int cmd_arg = cmd.substring(1,4).toInt();
+          if (cmd_arg <= 255){
+            Serial.print("K"); //Argument looks OK, send ack
+            return true;
+          }
         }
-      }
         break; //If not, break and send error message
+      case 'S': //Stop
+        //Always correct, since the arguments doesn't matter.
+        Serial.print("K"); //Argument looks OK, send ack
+        return true;
       case 'H': //Lamps
         //The first four numbers must be 0 or 1
         for (int i=0; i<4; i++){

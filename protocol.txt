@@ -25,7 +25,7 @@ I tabellen nedan betyder 'X' en godtycklig siffra och '-' don't care.
    H   | XXXX-- | Sätter på eller stänger av strålkastarna i ordningen vänster upp,
        |        | vänster ner, höger upp och höger ner beroende på de fyra första
        |        | siffrorna. Siffran 0 stänger av lampan i motsvarande position
-       |        | och övriga siffror sätter på lampan.
+       |        | och 1 sätter på lampan. Övriga siffror accepteras inte.
 
 
 
