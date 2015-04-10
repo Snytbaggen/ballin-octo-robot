@@ -1,12 +1,15 @@
 import serial
 
-global serial_comm
-previous_move = previous_turn = 0
+#Command length is always 7 characters: 1 letter and 6 numbers. For turn/move only the first three
+#are used, and ranges between 0-255. For the headlights the first four are used, one for each light
+#where 1 is on and 0 is off.
 
 def SetSerialPort(port, baudrate):
     global serial_comm
     serial_comm = serial.Serial(port, baudrate)
     serial_comm.open()
+    #If the port cannot be opened the program will halt with an error message. If the open()
+    #call returns the port is assumed to be open and functioning.
 
 def IntToStr(number):
     ret = ""
@@ -47,17 +50,18 @@ def BuildTurnCommand(turn):
         turn = 255
     cmd += IntToStr(turn)+"000"
     return cmd
-
-def BuildExtraCommand(val1, val2):
-    cmd = "E"
-    val1 = FormatExtraCommandValue(val1)
-    val2 = FormatExtraCommandValue(val2)
-    cmd += IntToStr(val1) + IntToStr(val2)
     
     
 def SendCommand(cmd):
-    global serial_comm
+    #Check if port is set up. Since it is defined in SetSerialPort() which will stop
+    #the program if it can't open a port, it's assumed that the port will work if the
+    #variable exists.
+    if not 'serial_comm' in globals():
+        print "ERROR: No serial port set"
+        return
+
     serial_comm.write(cmd)
+
     answer = serial_comm.read()
     if answer == 'K':
         #everything OK, return
@@ -66,23 +70,23 @@ def SendCommand(cmd):
         #Fault command sent, notify user
         print "Faulty command sent: " + cmd
     else:
-        #This should never happen
+        #This should never happen since the arduino can only send K or F
         print "ERROR: Unknown answer from robot (" + answer + ") when sending command " + cmd
 
 def SendMoveCommand(move, turn):
-    global previous_move, previous_turn
+    #Set up global variables on first function call
+    if not 'previous_move'in globals() and not 'previous_turn' in globals():
+        global previous_move, previous_turn
+        previous_move = previous_turn = 0
     
     #Only send if the new values differs from the last ones, resending the same value will
     #do nothing since the robot is already moving/turning in that direction with that speed
     if move != previous_move:
         SendCommand(BuildMoveCommand(move).encode('utf-8'))
+        previous_move = move
     if turn != previous_turn:
         SendCommand(BuildTurnCommand(turn).encode('utf-8'))
-    previous_move = move
-    previous_turn = turn
-
-def SendExtraCommand(val1, val2):
-    SendCommand(BuildExtraCommand(val1, val2).encode('utf-8'))
+        previous_turn = turn
 
 def HeadlightsOn():
     SendCommand("H111100".encode('utf-8'))
@@ -91,5 +95,9 @@ def HeadlightsOff():
     SendCommand("H000000".encode('utf-8'))
 
 def Disconnect():
-    global serial_comm
+    #Check if a port exists first. Because of how SetSerialPort() works it's assumed to be
+    #open and working.
+    if not 'serial_comm' in globals():
+        print "ERROR: No serial port set"
+        return
     serial_comm.close()
