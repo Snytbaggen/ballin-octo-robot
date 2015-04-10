@@ -74,7 +74,8 @@ def SendCommand(cmd):
         print "ERROR: Unknown answer from robot (" + answer + ") when sending command " + cmd
 
 def SendMoveCommand(move, turn):
-    #Set up global variables on first function call
+    #Set up global variables on first function call. The check is done so the value initialization
+    #to 0 is only done once.
     if not 'previous_move'in globals() and not 'previous_turn' in globals():
         global previous_move, previous_turn
         previous_move = previous_turn = 0
