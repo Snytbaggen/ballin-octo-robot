@@ -1,5 +1,3 @@
-#include <Servo.h>
-
 #define engine_black 9
 #define engine_red 6
 #define steering_yellow 5
@@ -10,34 +8,37 @@
 #define right_upper_led 7
 #define right_lower_led 8
 
-//9 6 5 3
-
-int engine_motor[2], steering_motor[2], headlights[4];
-Servo laser_servo_1;
-Servo laser_servo_2;
-
-
 /*
-ENGINE MOTOR PINOUT
+ENGINE MOTOR 
+Pinout
 G - Vdd
 Y - Gnd
 B - Dir 1
 R - Dir 2
 
-STEERING MOTOR PINOUT
+Protocol
+BR
+00 Still
+01 Forwards
+10 Backwards
+11 Unused
+
+STEERING MOTOR 
+Pinout
 G - Vdd
 Y - Dir 1
 B - Dir 2
 R - Gnd
+
+Protocol
+YB
+00 Still
+01 Left
+10 Right
+11 Unused
 */
 
-/*
-Simple protocol
-RS
-00 still
-01 right (forward?)
-10 left  (left?)
-*/
+int engine_motor[2], steering_motor[2], headlights[4];
 
 void setup(){
   engine_motor[0] = engine_black;
@@ -64,9 +65,13 @@ void setup(){
 }
 
 void loop(){
+    //Do nothing, wait for serial interrupt
 }
 
 void serialEvent(){
+   //Read 7 characters, then check if it's a valid command.
+   //Would be better to use some kind of timeout as well to avoid
+   //desyncing, but I couldn't get it to work.
   String cmd = "";
   while (cmd.length() < 7){
     if (Serial.available()){
@@ -78,6 +83,7 @@ void serialEvent(){
   }
 }
 
+//Command structure is one letter and 
 boolean isValidCommand(String cmd){
   if (cmd.length() == 7){
     char cmd_type = cmd[0];
@@ -86,17 +92,29 @@ boolean isValidCommand(String cmd){
       case 'B': //Backward
       case 'L': //Left
       case 'R': //Right
-      case 'S': //Stop
+      case 'S': //Stop0
+      {
+        //Read the argument. Only the first group of 3 matters.
+        int cmd_arg = cmd.substring(1,4).toInt();
+        if (cmd_arg <= 255){
+          Serial.print("K"); //Argument looks OK, send ack
+          return true;
+        }
+      }
+        break; //If not, break and send error message
       case 'H': //Lamps
-        break;  //command type OK, move on to check arguments
+        //The first four numbers must be 0 or 1
+        for (int i=0; i<4; i++){
+          char value = cmd[i+1];
+          if (value != '0' && value != '1'){
+            Serial.print("F"); //Something wrong, notify sender
+            return false;
+          }
+        }
+        Serial.print("K"); //Argument looks OK, send ack
+        return true;
       default:
-        return false;
-    }
-    int cmd_arg1 = cmd.substring(1,4).toInt();
-    int cmd_arg2 = cmd.substring(4).toInt();
-    if (cmd_arg1 <= 255 && cmd_arg2 <= 255){
-      Serial.print("K"); //Arguments looks OK, sent ack
-      return true;
+        break;  //Bad command type
     }
   }
   Serial.print("F"); //Something wrong, notify sender
