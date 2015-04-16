@@ -1,5 +1,6 @@
 # Raspbery Pi Color Tracking and Robot Steering
 # Code by Daniel Haggmyr, with borrowed code from Oscar Liang
+# Python 2.7.3
 
 import math, pygame, time
 import robot_comm as comm #,serial
@@ -293,7 +294,7 @@ while True:
         background.blit(pygamefont.render("blob x, y: N/A", 1, (255,255,255)),(text_x_offset,text_y_offset-10))
         comm.SendMoveCommand(0,0)
 
-        size_error_previous = size_error_integral = 0 #Also reset the regulation variables to avoid junk data later
+        size_error_previous = 0 #Also reset the regulation variables to avoid junk data later
 
     #Write other information on screen
     background.blit(pygamefont.render("hsv-range: "+str(hsv_range), 1, (255,255,255)),(text_x_offset,text_y_offset*2-10))
