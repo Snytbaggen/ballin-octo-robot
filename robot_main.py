@@ -1,5 +1,5 @@
 # Raspbery Pi Color Tracking and Robot Steering
-# Code by Daniel Haggmyr, with borrowed code from Oscar Liang
+# Code by Daniel Haggmyr, Filip Polbratt, with borrowed code from Oscar Liang
 # Python 2.7.3
 
 import math, pygame, time
@@ -145,6 +145,37 @@ def CalculateTurn(current_position):
     position_error_previous = position_error_current
     return turn_value
 
+# A version of CalculateTurn that uses proportional navigation for intercept with lead pursuit.
+# The angle between the vehicle's direction of motion and the direction to the tracked object from 
+# the vehicle will be kept constant.
+def CalculateProportionalNavigationTurn(current_position):
+    global position_error_previous
+    global target_locked
+    global target_position_proportional
+    Kp = -4 #Proportional constant
+    Kd = -2 #Derivative constant
+
+    # Lock the desired angle the first time
+    if target_locked = False:
+      target_position_proportional = current_position
+      target_locked = True
+    cutoff = 50 # Cutoff to counter "jitter" in the position caused by camera, chosen by experiment
+
+    position_error_current = target_position_proportional - current_position
+    position_error_derivative = position_error_current - position_error_previous
+
+    turn_value = Kp * position_error_current + Kd * position_error_derivative
+
+    if turn_value > cutoff:
+        turn_value = 255
+    elif turn_value < -cutoff:
+        turn_value = -255
+    else:
+        turn_value = 0
+
+    position_error_previous = position_error_current
+    return turn_value
+
 def CalculateMovement(posX, posY, radius):
     move = CalculateMove(radius)
     turn = CalculateTurn(posX)
@@ -169,6 +200,8 @@ def exit_program():
 #Main program starts here#
 ##########################
 
+target_position_proportional = 0
+target_locked = False
 size_error_previous = 0
 position_error_previous = 0
 previous_turn = 0
